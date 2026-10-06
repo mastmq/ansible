@@ -20,7 +20,7 @@ One role, `roles/mast`, and one playbook, `playbooks/site.yml`. A host's role co
 
 **Flat variables, not nested dicts.** Ansible replaces a dict rather than merging it, so a user overriding one key of `mast_auth.http` in `group_vars` would drop the rest without a warning.
 
-**ansible-lint copies the collection into `~/.ansible/collections`** when it runs, and that copy then shadows the checkout for every later `ansible-playbook`. `tests/e2e/run.sh` sets `ANSIBLE_COLLECTIONS_PATH` so the e2e test always runs the working tree.
+**ansible-lint copies the collection into `~/.ansible/collections`** when it runs, and that copy then shadows the checkout for every later `ansible-playbook`. `tests/e2e/run.sh` sets `ANSIBLE_COLLECTIONS_PATH` so the e2e test always runs the working tree. It puts its own directory **first, not alone**: alone, it also hid `community.docker`, and that passed on a laptop whose Homebrew Ansible bundles it and failed on the first CI run, which installs `ansible-core` by itself. A green local e2e says little about CI's collection set.
 
 ## Testing
 
