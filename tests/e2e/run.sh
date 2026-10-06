@@ -58,7 +58,13 @@ docker run -d --name mast-e2e-files --network "$net" -v "$release:/srv:ro" -w /s
 collections="$here/.build/collections"
 mkdir -p "$collections/ansible_collections/mastmq"
 ln -sfn "$root" "$collections/ansible_collections/mastmq/mast"
-export ANSIBLE_COLLECTIONS_PATH="$collections"
+# First, so this checkout shadows the copy ansible-lint leaves in
+# ~/.ansible/collections. Not alone, though: community.docker, which the
+# containers are reached through, is installed in the default locations, and
+# a path naming only this directory hid it. That passed on a machine whose
+# Ansible bundles community.docker and failed on the first CI run, which
+# installs ansible-core alone.
+export ANSIBLE_COLLECTIONS_PATH="$collections:${ANSIBLE_COLLECTIONS_PATH:-$HOME/.ansible/collections:/usr/share/ansible/collections}"
 export ANSIBLE_FORCE_COLOR=1
 
 play() { ansible-playbook -i "$here/inventory/hosts.yml" "$root/playbooks/site.yml" "$@"; }
