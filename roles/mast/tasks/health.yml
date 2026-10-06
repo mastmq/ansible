@@ -1,0 +1,37 @@
+---
+# The same two questions the chart's probes ask, for the same reasons.
+#
+# js-server-only asks whether the server is up. The full /healthz also checks
+# JetStream, which fails while a peer is catching up and whenever the meta
+# group has no quorum, so a lone core being bootstrapped cannot pass it and
+# must not be made to wait on it: its peers are the hosts after it.
+#
+# A core that was already running is being restarted inside a working
+# cluster. Moving on to the next core before this one has caught up is how a
+# rolling restart takes two of three peers down at once, so it waits for the
+# full check.
+- name: Wait for the NATS server to come up
+  ansible.builtin.uri:
+    url: "http://{{ mast_private_address }}:{{ mast_nats_monitor_port }}/healthz?js-server-only=true"
+  register: mast_health
+  until: mast_health.status == 200
+  retries: "{{ mast_health_retries }}"
+  delay: "{{ mast_health_delay }}"
+  changed_when: false
+
+- name: Wait for JetStream to catch up
+  ansible.builtin.uri:
+    url: "http://{{ mast_private_address }}:{{ mast_nats_monitor_port }}/healthz"
+  register: mast_health
+  until: mast_health.status == 200
+  retries: "{{ mast_health_retries }}"
+  delay: "{{ mast_health_delay }}"
+  changed_when: false
+  when: mast_role != 'core' or mast_was_running | bool
+
+- name: Wait for the MQTT listener
+  ansible.builtin.wait_for:
+    host: "{{ '127.0.0.1' if mast_mqtt_bind == '0.0.0.0' else mast_mqtt_bind }}"
+    port: "{{ mast_mqtt_port }}"
+    timeout: "{{ mast_health_retries | int * mast_health_delay | int }}"
+  when: mast_role != 'core'

@@ -1,0 +1,186 @@
+---
+# mast runs in one of three roles, and on a VM the role follows the inventory.
+#
+# A host in mast_core_group is a core: it holds Raft and the KV buckets, so it
+# wants a stable address and a disk that survives. A host in mast_edge_group
+# is an edge: it terminates MQTT and joins the cores as a NATS leaf node, and
+# it is the tier you add machines to as connections grow. A host in neither
+# runs all-in-one, which is one process, file-backed JetStream and no
+# cluster: an edge site, a lab, anything small enough not to want two tiers.
+#
+# Keep the tiers on separate machines. Coupling them turns every edge restart
+# into Raft membership churn, which is the reason the split exists.
+mast_core_group: mast_core
+mast_edge_group: mast_edge
+mast_role: >-
+  {{ 'core' if inventory_hostname in groups.get(mast_core_group, [])
+     else 'edge' if inventory_hostname in groups.get(mast_edge_group, [])
+     else 'all-in-one' }}
+
+# --- Installation -----------------------------------------------------------
+
+mast_version: "0.1.0"
+
+# release: download the tarball for mast_version from the GitHub release,
+#          verified against the release's checksum file.
+# local:   copy mast_binary_src from the controller. For air-gapped sites,
+#          for a build that has not been released, and for the e2e tests.
+mast_install_method: release
+mast_binary_src: ""
+
+mast_release_base_url: "https://github.com/mastmq/mast/releases/download/v{{ mast_version }}"
+mast_release_archive: "mast_{{ mast_version }}_linux_{{ mast_arch }}.tar.gz"
+mast_release_checksums: "mast_{{ mast_version }}_checksums.txt"
+
+# Each version gets its own directory and mast_bin_path is a symlink into it,
+# so an upgrade is a relink plus a restart, and a rollback is the same with the
+# older version: nothing is re-downloaded that is still on disk.
+mast_install_dir: /opt/mast
+mast_bin_path: /usr/local/bin/mast
+
+mast_user: mast
+mast_group: mast
+mast_config_dir: /etc/mast
+# JetStream's store. Only core and all-in-one write here, and it is the one
+# path on the machine that must survive a reinstall.
+mast_data_dir: /var/lib/mast
+
+# --- Addresses ---------------------------------------------------------------
+
+# The address other mast nodes reach this one on. Routes, leaf connections,
+# the NATS monitor, metrics and the internal listener all bind here and never
+# on 0.0.0.0: none of them authenticate, and pprof is on the metrics port.
+# Set it per host when the default route is not the private network.
+mast_private_address: "{{ ansible_facts['default_ipv4']['address'] }}"
+
+# Where devices connect. The only listeners that face the world.
+mast_mqtt_bind: "0.0.0.0"
+mast_mqtt_port: 1883
+
+# MQTT over WebSocket, for browsers. Zero disables it. Authentication applies
+# exactly as on the plain listener.
+mast_mqtt_ws_port: 0
+
+# A listener that skips authentication and authorization entirely, for
+# trusted services on the private network. Zero disables it. It binds to
+# mast_private_address, and whatever reaches it is trusted completely, so a
+# firewall still has to keep it off every network the devices are on.
+mast_mqtt_internal_port: 0
+
+# NATS ports on a core. Routes carry the Raft mesh between cores, leaf is
+# where edges dial in, and client is for the nats CLI.
+mast_nats_route_port: 6222
+mast_nats_leaf_port: 7422
+mast_nats_client_port: 4222
+mast_nats_monitor_port: 8222
+mast_metrics_port: 9090
+
+# The NATS server name. It has to be unique per node and stable across
+# restarts: a core closes a route from a peer that carries its own name, and
+# a second leaf under a name already attached evicts the first, so edges that
+# share a name knock each other off in turn.
+mast_nats_name: "{{ inventory_hostname }}"
+
+# --- Broker settings ---------------------------------------------------------
+
+mast_log_level: info
+# json for anything shipping journald to a log store; text reads better in
+# journalctl on a lab box.
+mast_log_format: json
+
+# Replication factor for the KV buckets and the durable QoS stream. It cannot
+# exceed the number of cores, and the role refuses to run if it does. Use 3
+# for anything you care about.
+mast_core_jetstream_replicas: 3
+
+# Budget memory as roughly 40-80KB per TLS connection plus headroom, and
+# remember this multiplies by connections per node, not by the fleet.
+mast_mqtt_max_writes_pending: 1024
+mast_mqtt_connect_timeout: 10s
+
+# TLS on the MQTT listener, as PEM content rather than paths, so the key can
+# live in ansible-vault. Both or neither. On a VM there is usually no ingress
+# in front of the broker to terminate it instead.
+mast_mqtt_tls_cert: ""
+mast_mqtt_tls_key: ""
+
+# Every setting is a flat variable rather than a nested dict on purpose:
+# Ansible replaces a dict wholesale instead of merging it, so overriding one
+# key of a nested default in group_vars silently drops all the others.
+
+# static: one tenant, everything allowed. Only where the deployment itself
+#         is the security boundary.
+# http:   ask your own service, posting the MQTT fields as JSON.
+# jwt:    verify a signed token locally; nothing on the network during a
+#         reconnect storm, and revocation only as fast as token expiry.
+mast_auth_mode: static
+
+# The tenant for static mode, for the emqx wire, and for a JWT without the
+# tenant claim.
+mast_auth_tenant_default: default
+
+# mast lets the service name the tenant. emqx speaks EMQX v5's http backend
+# shape, so an auth service written for EMQX works unchanged.
+mast_auth_http_wire: mast
+mast_auth_http_authn_url: ""
+# Empty means an authenticated connection may use any topic inside its own
+# tenant.
+mast_auth_http_authz_url: ""
+mast_auth_http_timeout: 2s
+# Authorization only: deny makes an outage look like a broker outage, allow
+# makes it look like an open door. Authentication always fails closed.
+mast_auth_http_on_error: deny
+# Authorization is asked on every publish, so 0s is a round trip per message.
+mast_auth_http_cache_ttl: 1m
+mast_auth_http_cache_size: 100000
+# Sent with every auth request. They go into an environment file readable
+# only by root and mast, never into mast.toml, so a config diff in the
+# Ansible output does not print a bearer token.
+mast_auth_http_headers: {}
+
+mast_auth_jwt_source: username
+mast_auth_jwt_vendor_prefix: false
+# Required in jwt mode, deliberately without a default: accepting any
+# algorithm a token names is how alg:none and RSA-to-HMAC confusion work.
+mast_auth_jwt_algorithms: []
+# Exactly one of these, as content so it can live in ansible-vault. Each is
+# written to its own file under mast_config_dir and the broker is pointed at
+# the file.
+mast_auth_jwt_hmac_secret: ""
+mast_auth_jwt_public_key: ""
+mast_auth_jwt_tenant_claim: ""
+mast_auth_jwt_superuser_claim: ""
+mast_auth_jwt_issuer: ""
+mast_auth_jwt_audience: ""
+
+# QoS 1 and 2 are stored on one replicated stream before they are
+# acknowledged, so a node cut off from the cores catches up instead of losing
+# what was published for its clients. Off makes cross-node QoS 1 and 2
+# at-most-once; it exists for rollouts and measurement.
+mast_fabric_durable_qos: true
+# How long a node can be cut off and still catch up.
+mast_fabric_durable_max_age: 5m
+
+# How long a disconnected persistent session and its queued QoS 1/2 messages
+# are kept.
+mast_session_expiry: 24h
+
+# Extra environment for the service, merged into the root-only environment
+# file. Anything under MAST__ overrides mast.toml.
+mast_extra_env: {}
+
+# --- systemd -----------------------------------------------------------------
+
+# Every connection is a file descriptor, and the usual 1024 soft limit caps an
+# edge at a thousand devices without saying why.
+mast_limit_nofile: 1048576
+
+# Raft wants a clean handover rather than a kill; an edge wants long enough
+# for its devices to be handed over rather than cut.
+mast_stop_timeout: "{{ 90 if mast_role == 'edge' else 60 }}"
+
+# How long to wait for a restarted node before failing the play. A core
+# restoring a large store answers the monitor port long before JetStream is
+# back, so this is generous for the same reason the chart's startup probe is.
+mast_health_retries: 60
+mast_health_delay: 5

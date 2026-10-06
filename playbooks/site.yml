@@ -1,0 +1,43 @@
+---
+# Deploys or upgrades a whole mast installation from one inventory.
+#
+#   mast_core        the Raft tier
+#   mast_edge        the MQTT tier, joining the cores as leaf nodes
+#   mast_standalone  all-in-one hosts, each a broker of its own
+#
+# Every play rolls one host at a time. A core restarted beside another loses
+# quorum, and an edge restarted beside another reconnects twice the devices at
+# once; correlated reconnects are the failure mode that actually hurts.
+
+- name: Deploy the core tier
+  hosts: mast_core
+  become: true
+  serial: 1
+  # One core failing to come back is a reason to stop before the next one is
+  # restarted, not a reason to carry on without it.
+  any_errors_fatal: true
+  roles:
+    - role: mastmq.mast.mast
+
+- name: Wait for the core tier to reach quorum
+  hosts: mast_core
+  become: false
+  tasks:
+    - name: Wait for quorum
+      ansible.builtin.include_role:
+        name: mastmq.mast.mast
+        tasks_from: quorum.yml
+
+- name: Deploy the edge tier
+  hosts: mast_edge
+  become: true
+  serial: "{{ mast_edge_serial | default(1) }}"
+  max_fail_percentage: 0
+  roles:
+    - role: mastmq.mast.mast
+
+- name: Deploy standalone brokers
+  hosts: mast_standalone
+  become: true
+  roles:
+    - role: mastmq.mast.mast

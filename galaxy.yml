@@ -1,0 +1,29 @@
+---
+namespace: mastmq
+name: mast
+version: 0.1.0
+readme: README.md
+authors:
+  - Parham Alvani <parham.alvani@gmail.com>
+description: Run mast, the multi-tenant MQTT broker built on core NATS, on virtual machines and bare metal under systemd.
+license:
+  - Apache-2.0
+tags:
+  - infrastructure
+  - linux
+  - mqtt
+  - nats
+  - broker
+  - iot
+  - systemd
+dependencies: {}
+repository: https://github.com/mastmq/ansible
+documentation: https://github.com/mastmq/ansible#readme
+homepage: https://mastmq.github.io/
+issues: https://github.com/mastmq/ansible/issues
+build_ignore:
+  - .github
+  - tests
+  - justfile
+  - CLAUDE.md
+  - "*.tar.gz"

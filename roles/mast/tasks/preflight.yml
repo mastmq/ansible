@@ -1,0 +1,106 @@
+---
+- name: Refuse a role mast does not have
+  ansible.builtin.assert:
+    that: mast_role in ['all-in-one', 'core', 'edge']
+    fail_msg: "mast_role is {{ mast_role }}; it must be all-in-one, core or edge"
+    quiet: true
+
+- name: Refuse a host that is in both tiers
+  ansible.builtin.assert:
+    that: not (inventory_hostname in groups.get(mast_core_group, []) and inventory_hostname in groups.get(mast_edge_group, []))
+    fail_msg: >-
+      {{ inventory_hostname }} is in both {{ mast_core_group }} and {{ mast_edge_group }}.
+      The tiers are split so that an edge restart is never Raft churn; one
+      process per machine, one role per process.
+    quiet: true
+
+- name: Check the cluster can hold its replication factor
+  ansible.builtin.assert:
+    that:
+      - mast_core_jetstream_replicas | int >= 1
+      - mast_core_jetstream_replicas | int <= groups.get(mast_core_group, []) | length
+    fail_msg: >-
+      mast_core_jetstream_replicas is {{ mast_core_jetstream_replicas }} but
+      {{ mast_core_group }} has {{ groups.get(mast_core_group, []) | length }} hosts:
+      the KV buckets cannot be created at that replication factor.
+    quiet: true
+  when: mast_role == 'core'
+
+- name: Check an edge has cores to join
+  ansible.builtin.assert:
+    that: groups.get(mast_core_group, []) | length > 0
+    fail_msg: "{{ inventory_hostname }} is an edge but {{ mast_core_group }} is empty; an edge without a core has nowhere to store anything"
+    quiet: true
+  when: mast_role == 'edge'
+
+- name: Check the install source
+  ansible.builtin.assert:
+    that: mast_install_method == 'release' or (mast_install_method == 'local' and mast_binary_src | length > 0)
+    fail_msg: "mast_install_method must be release, or local with mast_binary_src set"
+    quiet: true
+
+- name: Check TLS is all or nothing
+  ansible.builtin.assert:
+    that: (mast_mqtt_tls_cert | length > 0) == (mast_mqtt_tls_key | length > 0)
+    fail_msg: "mast_mqtt_tls_cert and mast_mqtt_tls_key must both be set, or neither"
+    quiet: true
+
+- name: Check the auth settings the broker would reject at start
+  ansible.builtin.assert:
+    that:
+      - mast_auth_mode in ['static', 'http', 'jwt']
+      - mast_auth_mode != 'http' or mast_auth_http_authn_url | length > 0
+      - >-
+        mast_auth_mode != 'jwt' or (
+          mast_auth_jwt_algorithms | length > 0 and
+          (mast_auth_jwt_hmac_secret | length > 0) != (mast_auth_jwt_public_key | length > 0))
+    fail_msg: >-
+      http mode needs mast_auth_http_authn_url; jwt mode needs
+      mast_auth_jwt_algorithms and exactly one of mast_auth_jwt_hmac_secret
+      and mast_auth_jwt_public_key.
+    quiet: true
+  when: mast_role != 'core'
+
+# The config names every core by address, so a run limited to one edge still
+# needs the cores' facts. Gather them from the cores themselves rather than
+# asking the user to run the whole inventory.
+- name: Gather facts from cores this run did not reach
+  ansible.builtin.setup:
+    gather_subset: [network]
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+  loop: "{{ groups.get(mast_core_group, []) }}"
+  when:
+    - mast_role != 'all-in-one'
+    - (hostvars[item]['ansible_facts'] | default({}))['default_ipv4'] is not defined
+  run_once: true
+
+- name: Map the machine architecture to a release name
+  ansible.builtin.set_fact:
+    mast_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64', 'arm64': 'arm64'}[ansible_facts['architecture']] | default('') }}"
+
+- name: Refuse an architecture mast is not released for
+  ansible.builtin.assert:
+    that: mast_arch | length > 0
+    fail_msg: "mast is released for amd64 and arm64; this host is {{ ansible_facts['architecture'] }}"
+    quiet: true
+
+- name: Check the service manager
+  ansible.builtin.assert:
+    that: ansible_facts['service_mgr'] == 'systemd'
+    fail_msg: "this role runs mast under systemd; {{ inventory_hostname }} uses {{ ansible_facts['service_mgr'] }}"
+    quiet: true
+
+- name: Check whether mast is already running
+  ansible.builtin.systemd_service:
+    name: mast
+  register: mast_unit
+  failed_when: false
+
+# A node that was running before this run is being restarted inside a working
+# cluster, so it has to be fully healthy before the play moves on. One that
+# was not is being bootstrapped, and a lone new core cannot pass the full
+# health check until its peers exist.
+- name: Remember whether this is a restart or a first start
+  ansible.builtin.set_fact:
+    mast_was_running: "{{ (mast_unit.status | default({})).ActiveState | default('') == 'active' }}"

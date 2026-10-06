@@ -1,0 +1,49 @@
+---
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # The role follows the broker, so it can break without a line of it
+  # changing. A weekly run against mast's main is how that shows up here
+  # rather than at someone's deploy.
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: pip install ansible-core ansible-lint yamllint
+      - run: yamllint .
+      - run: ansible-lint
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: ansible
+      - uses: actions/checkout@v7
+        with:
+          repository: mastmq/mast
+          path: mast
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: mast/go.mod
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: pip install ansible-core
+      - run: ansible-galaxy collection install community.docker
+      - run: ansible/tests/e2e/run.sh
+        env:
+          MAST_SRC: ${{ github.workspace }}/mast

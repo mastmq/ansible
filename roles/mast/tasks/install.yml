@@ -1,0 +1,65 @@
+---
+- name: Create the mast group
+  ansible.builtin.group:
+    name: "{{ mast_group }}"
+    system: true
+
+- name: Create the mast user
+  ansible.builtin.user:
+    name: "{{ mast_user }}"
+    group: "{{ mast_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ mast_data_dir }}"
+    create_home: false
+
+- name: Create the version directory
+  ansible.builtin.file:
+    path: "{{ mast_install_dir }}/{{ mast_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install from the GitHub release
+  when: mast_install_method == 'release'
+  block:
+    - name: Download the release archive
+      ansible.builtin.get_url:
+        url: "{{ mast_release_base_url }}/{{ mast_release_archive }}"
+        checksum: "sha256:{{ mast_release_base_url }}/{{ mast_release_checksums }}"
+        dest: "{{ mast_install_dir }}/{{ mast_version }}/{{ mast_release_archive }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Unpack the binary
+      ansible.builtin.unarchive:
+        src: "{{ mast_install_dir }}/{{ mast_version }}/{{ mast_release_archive }}"
+        dest: "{{ mast_install_dir }}/{{ mast_version }}"
+        remote_src: true
+        include: [mast]
+        creates: "{{ mast_install_dir }}/{{ mast_version }}/mast"
+        owner: root
+        group: root
+
+# A local binary is copied as-is. Its version is whatever mast_version says it
+# is, so bump mast_version with every new build or the copy overwrites the
+# directory of the version it claims to be.
+- name: Install from a binary on the controller
+  ansible.builtin.copy:
+    src: "{{ mast_binary_src }}"
+    dest: "{{ mast_install_dir }}/{{ mast_version }}/mast"
+    owner: root
+    group: root
+    mode: "0755"
+  when: mast_install_method == 'local'
+  notify: Restart mast
+
+- name: Point the binary path at this version
+  ansible.builtin.file:
+    src: "{{ mast_install_dir }}/{{ mast_version }}/mast"
+    dest: "{{ mast_bin_path }}"
+    state: link
+    force: true
+  notify: Restart mast

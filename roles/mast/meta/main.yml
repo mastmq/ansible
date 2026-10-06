@@ -1,0 +1,17 @@
+---
+galaxy_info:
+  role_name: mast
+  namespace: mastmq
+  author: Parham Alvani
+  description: Run mast, the multi-tenant MQTT broker built on core NATS, as a systemd service in the all-in-one, core or edge role.
+  license: Apache-2.0
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Debian
+      versions: [bookworm, trixie]
+    - name: Ubuntu
+      versions: [jammy, noble]
+    - name: EL
+      versions: ["9", "10"]
+  galaxy_tags: [mqtt, nats, broker, iot]
+dependencies: []

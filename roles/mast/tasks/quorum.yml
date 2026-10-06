@@ -1,0 +1,13 @@
+---
+# Run against the whole core tier once every core has been deployed. A core
+# being bootstrapped waits only for its own server, since its peers come after
+# it, so this is the first point at which the cluster as a whole can be asked
+# for quorum, and it has to have it before an edge is pointed at it.
+- name: Wait for JetStream on every core
+  ansible.builtin.uri:
+    url: "http://{{ mast_private_address }}:{{ mast_nats_monitor_port }}/healthz"
+  register: mast_quorum
+  until: mast_quorum.status == 200
+  retries: "{{ mast_health_retries }}"
+  delay: "{{ mast_health_delay }}"
+  changed_when: false

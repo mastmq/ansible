@@ -1,0 +1,16 @@
+---
+- name: Check the inventory and settings before touching the host
+  ansible.builtin.import_tasks: preflight.yml
+  tags: [mast, mast_preflight]
+
+- name: Install the mast binary
+  ansible.builtin.import_tasks: install.yml
+  tags: [mast, mast_install]
+
+- name: Write the configuration
+  ansible.builtin.import_tasks: configure.yml
+  tags: [mast, mast_config]
+
+- name: Run mast under systemd
+  ansible.builtin.import_tasks: service.yml
+  tags: [mast, mast_service]

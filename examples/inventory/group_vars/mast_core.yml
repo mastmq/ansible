@@ -1,0 +1,4 @@
+---
+# The replication factor cannot exceed the number of cores. Three cores and
+# three replicas survive losing one of them.
+mast_core_jetstream_replicas: 3

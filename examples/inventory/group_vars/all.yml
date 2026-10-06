@@ -1,0 +1,16 @@
+---
+mast_version: "0.1.0"
+mast_log_format: json
+
+# Terminate TLS on the broker; on a VM there is usually nothing in front of it
+# to do it instead. Keep the key in ansible-vault.
+# mast_mqtt_port: 8883
+# mast_mqtt_tls_cert: "{{ lookup('file', 'files/mqtt.crt') }}"
+# mast_mqtt_tls_key: "{{ vault_mast_mqtt_tls_key }}"
+
+# Ask your own service who a device is and which tenant it belongs to.
+# mast_auth_mode: http
+# mast_auth_http_authn_url: http://auth.internal:8080/authn
+# mast_auth_http_authz_url: http://auth.internal:8080/authz
+# mast_auth_http_headers:
+#   Authorization: "Bearer {{ vault_mast_auth_token }}"
