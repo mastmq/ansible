@@ -1,5 +1,5 @@
 ---
-mast_version: "0.1.0"
+mast_version: "0.2.0"
 mast_log_format: json
 
 # Terminate TLS on the broker; on a VM there is usually nothing in front of it

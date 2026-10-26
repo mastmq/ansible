@@ -19,7 +19,7 @@ mast_role: >-
 
 # --- Installation -----------------------------------------------------------
 
-mast_version: "0.1.0"
+mast_version: "0.2.0"
 
 # release: download the tarball for mast_version from the GitHub release,
 #          verified against the release's checksum file.
