@@ -84,7 +84,7 @@ Every variable is in [`roles/mast/defaults/main.yml`](roles/mast/defaults/main.y
 
 | Variable | Default | |
 | --- | --- | --- |
-| `mast_version` | `0.1.0` | the release to install |
+| `mast_version` | `0.2.0` | the release to install |
 | `mast_private_address` | default route's address | where the unauthenticated ports bind, and how peers reach this node |
 | `mast_core_jetstream_replicas` | `3` | replication for the KV buckets; cannot exceed the number of cores |
 | `mast_mqtt_port` | `1883` | |
