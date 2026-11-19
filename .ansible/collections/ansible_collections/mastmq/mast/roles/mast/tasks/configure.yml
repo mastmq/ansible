@@ -1,0 +1,70 @@
+---
+# root owns everything here and mast can only read it: a broker that can
+# rewrite its own auth settings is one exploit away from turning them off.
+- name: Create the config directory
+  ansible.builtin.file:
+    path: "{{ mast_config_dir }}"
+    state: directory
+    owner: root
+    group: "{{ mast_group }}"
+    mode: "0750"
+
+- name: Create the data directory
+  ansible.builtin.file:
+    path: "{{ mast_data_dir }}"
+    state: directory
+    owner: "{{ mast_user }}"
+    group: "{{ mast_group }}"
+    mode: "0750"
+  when: mast_role != 'edge'
+
+# Parsed by the binary it is about to be used with, so a TOML syntax error
+# fails here instead of as a crash loop after the restart. It does not catch a
+# misspelled key: the broker ignores those, which is why the template only
+# writes keys from config.example.toml.
+- name: Write mast.toml
+  ansible.builtin.template:
+    src: mast.toml.j2
+    dest: "{{ mast_config_dir }}/mast.toml"
+    owner: root
+    group: "{{ mast_group }}"
+    mode: "0640"
+    validate: "{{ mast_bin_path }} --config %s config show"
+  notify: Restart mast
+
+- name: Write the environment file
+  ansible.builtin.template:
+    src: mast.env.j2
+    dest: "{{ mast_config_dir }}/mast.env"
+    owner: root
+    group: "{{ mast_group }}"
+    mode: "0640"
+  no_log: true
+  notify: Restart mast
+
+- name: Write the TLS certificate and key
+  ansible.builtin.copy:
+    content: "{{ item.content }}"
+    dest: "{{ mast_config_dir }}/{{ item.name }}"
+    owner: root
+    group: "{{ mast_group }}"
+    mode: "0640"
+  loop:
+    - { name: tls.crt, content: "{{ mast_mqtt_tls_cert }}" }
+    - { name: tls.key, content: "{{ mast_mqtt_tls_key }}" }
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+  when: mast_role != 'core' and mast_mqtt_tls_cert | length > 0
+  notify: Restart mast
+
+- name: Write the JWT verification key
+  ansible.builtin.copy:
+    content: "{{ mast_auth_jwt_hmac_secret if mast_auth_jwt_hmac_secret | length > 0 else mast_auth_jwt_public_key }}"
+    dest: "{{ mast_config_dir }}/{{ 'jwt.secret' if mast_auth_jwt_hmac_secret | length > 0 else 'jwt.pub' }}"
+    owner: root
+    group: "{{ mast_group }}"
+    mode: "0640"
+  no_log: true
+  when: mast_role != 'core' and mast_auth_mode == 'jwt'
+  notify: Restart mast

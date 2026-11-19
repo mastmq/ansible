@@ -1,0 +1,117 @@
+{{ ansible_managed | comment }}
+#
+# Every key here must exist in mastmq/mast's configs/config.example.toml. The
+# broker ignores a key it does not read, silently, so a typo here is a setting
+# that looks applied and is not.
+{% set core_hosts = groups.get(mast_core_group, []) %}
+{% set mqtt = mast_role != 'core' %}
+{# A role default is not visible through another host's hostvars, only what
+   the inventory set, so a peer without an explicit address falls back to the
+   same fact the default is built from. #}
+{% macro peer(h) -%}
+{{ hostvars[h]['mast_private_address'] | default(hostvars[h]['ansible_facts']['default_ipv4']['address']) }}
+{%- endmacro %}
+
+role = {{ mast_role | to_json }}
+
+[log]
+level = {{ mast_log_level | to_json }}
+format = {{ mast_log_format | to_json }}
+{% if mqtt %}
+
+[mqtt]
+addr = "{{ mast_mqtt_bind }}:{{ mast_mqtt_port }}"
+{% if mast_mqtt_ws_port | int > 0 %}
+ws_addr = "{{ mast_mqtt_bind }}:{{ mast_mqtt_ws_port }}"
+{% endif %}
+{% if mast_mqtt_internal_port | int > 0 %}
+internal_addr = "{{ mast_private_address }}:{{ mast_mqtt_internal_port }}"
+{% endif %}
+{% if mast_mqtt_tls_cert | length > 0 %}
+tls_cert = "{{ mast_config_dir }}/tls.crt"
+tls_key = "{{ mast_config_dir }}/tls.key"
+{% endif %}
+max_writes_pending = {{ mast_mqtt_max_writes_pending }}
+connect_timeout = {{ mast_mqtt_connect_timeout | to_json }}
+{% endif %}
+
+[nats]
+name = {{ mast_nats_name | to_json }}
+{% if mast_role == 'core' %}
+client_addr = "{{ mast_private_address }}:{{ mast_nats_client_port }}"
+{% endif %}
+monitor_addr = "{{ mast_private_address }}:{{ mast_nats_monitor_port }}"
+{% if mast_role != 'edge' %}
+
+[core]
+store_dir = {{ mast_data_dir | to_json }}
+{% if mast_role == 'core' %}
+replicas = {{ mast_core_jetstream_replicas }}
+listen_addr = "{{ mast_private_address }}:{{ mast_nats_route_port }}"
+leaf_addr = "{{ mast_private_address }}:{{ mast_nats_leaf_port }}"
+# Every core, this one included, as the chart's StatefulSet does. A server
+# recognises a route to itself and drops it.
+routes = [
+{% for h in core_hosts %}
+  "nats://{{ peer(h) }}:{{ mast_nats_route_port }}",
+{% endfor %}
+]
+{% else %}
+replicas = 1
+{% endif %}
+{% endif %}
+{% if mast_role == 'edge' %}
+
+[edge]
+# Every core, so an edge survives losing the one it happened to dial.
+core_urls = [
+{% for h in core_hosts %}
+  "nats-leaf://{{ peer(h) }}:{{ mast_nats_leaf_port }}",
+{% endfor %}
+]
+{% endif %}
+{% if mqtt %}
+
+[tenant]
+default = {{ mast_auth_tenant_default | to_json }}
+
+[auth]
+mode = {{ mast_auth_mode | to_json }}
+
+# Headers are not here: they arrive from mast.env so they never sit in a file
+# whose diff Ansible prints.
+[auth.http]
+wire = {{ mast_auth_http_wire | to_json }}
+authn_url = {{ mast_auth_http_authn_url | to_json }}
+authz_url = {{ mast_auth_http_authz_url | to_json }}
+timeout = {{ mast_auth_http_timeout | to_json }}
+on_error = {{ mast_auth_http_on_error | to_json }}
+cache_ttl = {{ mast_auth_http_cache_ttl | to_json }}
+cache_size = {{ mast_auth_http_cache_size }}
+{% if mast_auth_mode == 'jwt' %}
+
+[auth.jwt]
+source = {{ mast_auth_jwt_source | to_json }}
+vendor_prefix = {{ mast_auth_jwt_vendor_prefix | bool | lower }}
+algorithms = {{ mast_auth_jwt_algorithms | to_json }}
+{% if mast_auth_jwt_hmac_secret | length > 0 %}
+hmac_secret_file = "{{ mast_config_dir }}/jwt.secret"
+{% else %}
+public_key_file = "{{ mast_config_dir }}/jwt.pub"
+{% endif %}
+tenant_claim = {{ mast_auth_jwt_tenant_claim | to_json }}
+superuser_claim = {{ mast_auth_jwt_superuser_claim | to_json }}
+issuer = {{ mast_auth_jwt_issuer | to_json }}
+audience = {{ mast_auth_jwt_audience | to_json }}
+{% endif %}
+
+[session]
+expiry = {{ mast_session_expiry | to_json }}
+
+[fabric]
+durable_qos = {{ mast_fabric_durable_qos | bool | lower }}
+durable_max_age = {{ mast_fabric_durable_max_age | to_json }}
+{% endif %}
+
+[obs]
+addr = "{{ mast_private_address }}:{{ mast_metrics_port }}"

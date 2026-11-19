@@ -1,0 +1,53 @@
+{{ ansible_managed | comment }}
+
+[Unit]
+Description=mast, a multi-tenant MQTT broker built on core NATS ({{ mast_role }})
+Documentation=https://github.com/mastmq/mast
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+User={{ mast_user }}
+Group={{ mast_group }}
+EnvironmentFile=-{{ mast_config_dir }}/mast.env
+ExecStart={{ mast_bin_path }} --config {{ mast_config_dir }}/mast.toml
+
+# mast shuts down on SIGTERM. Give it time to hand devices over or to leave
+# Raft cleanly before systemd escalates to SIGKILL.
+KillSignal=SIGTERM
+TimeoutStopSec={{ mast_stop_timeout }}
+
+# Restart on a crash, but not in a tight loop: a core that dies on start
+# usually has a store problem that restarting will not fix, and ten restarts a
+# second only bury the first error in the journal.
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+LimitNOFILE={{ mast_limit_nofile }}
+
+{% if [mast_mqtt_port, mast_mqtt_ws_port] | map('int') | select('>', 0) | select('<', 1024) | list | length > 0 %}
+# A listener below 1024 needs this and nothing else from root.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+{% else %}
+CapabilityBoundingSet=
+{% endif %}
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+{% if mast_role != 'edge' %}
+ReadWritePaths={{ mast_data_dir }}
+{% endif %}
+
+[Install]
+WantedBy=multi-user.target

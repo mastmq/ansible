@@ -1,0 +1,19 @@
+---
+extends: default
+rules:
+  # Comments here are prose explaining why; a width limit only chops them up.
+  line-length: disable
+  # ansible-lint's own rules require these to be set this way.
+  comments-indentation: false
+  # GitHub Actions' `on:` key is a key, not a boolean.
+  truthy:
+    check-keys: false
+  comments:
+    min-spaces-from-content: 1
+  braces:
+    max-spaces-inside: 1
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true
+ignore: |
+  tests/e2e/.build/

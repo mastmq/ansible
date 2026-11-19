@@ -1,0 +1,25 @@
+---
+- name: Install the systemd unit
+  ansible.builtin.template:
+    src: mast.service.j2
+    dest: /etc/systemd/system/mast.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart mast
+
+- name: Enable and start mast
+  ansible.builtin.systemd_service:
+    name: mast
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# Restart now rather than at the end of the play, so the health check below
+# checks the process that is running the new config, and so a play with
+# serial moves on to the next host only once this one is back.
+- name: Apply pending restarts
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for mast to be healthy
+  ansible.builtin.import_tasks: health.yml

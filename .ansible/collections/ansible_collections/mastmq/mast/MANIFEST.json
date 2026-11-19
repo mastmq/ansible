@@ -1,0 +1,38 @@
+{
+ "collection_info": {
+  "namespace": "mastmq",
+  "name": "mast",
+  "version": "0.1.2",
+  "authors": [
+   "Parham Alvani <parham.alvani@gmail.com>"
+  ],
+  "readme": "README.md",
+  "tags": [
+   "infrastructure",
+   "linux",
+   "mqtt",
+   "nats",
+   "broker",
+   "iot",
+   "systemd"
+  ],
+  "description": "Run mast, the multi-tenant MQTT broker built on core NATS, on virtual machines and bare metal under systemd.",
+  "license": [
+   "Apache-2.0"
+  ],
+  "license_file": null,
+  "dependencies": {},
+  "repository": "https://github.com/mastmq/ansible",
+  "documentation": "https://github.com/mastmq/ansible#readme",
+  "homepage": "https://mastmq.github.io/",
+  "issues": "https://github.com/mastmq/ansible/issues"
+ },
+ "file_manifest_file": {
+  "name": "FILES.json",
+  "ftype": "file",
+  "chksum_type": "sha256",
+  "chksum_sha256": "32e3096ab01b73166baeb675225232aaeeb71c21fa2639ae5bce557d5b59e9a9",
+  "format": 1
+ },
+ "format": 1
+}

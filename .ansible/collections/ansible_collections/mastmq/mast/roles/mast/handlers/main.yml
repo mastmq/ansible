@@ -1,0 +1,10 @@
+---
+# A node that was not running has just been started with the new everything
+# by the service task, and restarting it straight away would only cost a core
+# its first JetStream restore twice.
+- name: Restart mast
+  ansible.builtin.systemd_service:
+    name: mast
+    state: restarted
+    daemon_reload: true
+  when: mast_was_running | bool

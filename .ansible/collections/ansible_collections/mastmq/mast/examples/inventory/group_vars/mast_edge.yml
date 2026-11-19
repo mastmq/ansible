@@ -1,0 +1,4 @@
+---
+# How many edges restart at once. Each one reconnects every device it holds,
+# so raise this only as far as the fleet can absorb that many reconnects.
+mast_edge_serial: 1
