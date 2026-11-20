@@ -63,7 +63,7 @@ Each version is unpacked into `/opt/mast/<version>` and `/usr/local/bin/mast` is
 | Path | |
 | --- | --- |
 | `/etc/mast/mast.toml` | the configuration, owned by root and readable by the `mast` group. Checked by the binary with `mast config show` before it replaces the old one |
-| `/etc/mast/mast.env` | auth headers and `mast_extra_env`, kept out of `mast.toml` so a diff in the Ansible output never prints a token |
+| `/etc/mast/mast.env` | auth headers, the OTLP headers and `mast_extra_env`, kept out of `mast.toml` so a diff in the Ansible output never prints a token |
 | `/var/lib/mast` | JetStream's store, on core and all-in-one only. The one path that has to survive a reinstall |
 | `/etc/systemd/system/mast.service` | runs as the unprivileged `mast` user, with `LimitNOFILE` raised and the filesystem read-only apart from the store |
 
@@ -95,6 +95,10 @@ Every variable is in [`roles/mast/defaults/main.yml`](roles/mast/defaults/main.y
 | `mast_auth_http_headers` | `{}` | sent with every auth request; written to `mast.env`, not `mast.toml` |
 | `mast_auth_jwt_hmac_secret`, `mast_auth_jwt_public_key` | | exactly one in `jwt` mode, as content |
 | `mast_session_expiry` | `24h` | |
+| `mast_tracing_enabled` | `false` | OpenTelemetry traces of the message path, on edges and all-in-one hosts; writes a `[tracing]` block only when on |
+| `mast_tracing_endpoint` | `""` | the OTLP/HTTP collector, e.g. `http://otel-collector:4318` |
+| `mast_tracing_sampler`, `mast_tracing_sampler_arg` | `""` | an `OTEL_TRACES_SAMPLER` name and its ratio; `parentbased_traceidratio` and `"0.01"` for a fleet |
+| `mast_tracing_otlp_headers` | `""` | `OTEL_EXPORTER_OTLP_HEADERS`, for a collector's API key; written to `mast.env`, not `mast.toml` |
 | `mast_edge_serial` | `1` | how many edges `site` restarts at once |
 | `mast_limit_nofile` | `1048576` | every connection is a file descriptor, and the usual 1024 caps an edge at a thousand devices |
 

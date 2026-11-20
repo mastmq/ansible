@@ -115,3 +115,20 @@ durable_max_age = {{ mast_fabric_durable_max_age | to_json }}
 
 [obs]
 addr = "{{ mast_private_address }}:{{ mast_metrics_port }}"
+{% if mqtt and mast_tracing_enabled | bool %}
+
+# Only when on, so turning the collection over with it off changes nothing.
+# An empty key is left out: mast reads it the same way, and the file then
+# says only what was chosen.
+[tracing]
+enabled = true
+{% if mast_tracing_endpoint | length > 0 %}
+endpoint = {{ mast_tracing_endpoint | to_json }}
+{% endif %}
+{% if mast_tracing_sampler | length > 0 %}
+sampler = {{ mast_tracing_sampler | to_json }}
+{% endif %}
+{% if mast_tracing_sampler_arg | string | length > 0 %}
+sampler_arg = {{ mast_tracing_sampler_arg | string | to_json }}
+{% endif %}
+{% endif %}
