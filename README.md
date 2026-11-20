@@ -9,10 +9,10 @@ An Ansible collection, `mastmq.mast`, that runs [mast](https://github.com/mastmq
 ## Install
 
 ```console
-$ ansible-galaxy collection install git+https://github.com/mastmq/ansible.git,0.1.2
+$ ansible-galaxy collection install git+https://github.com/mastmq/ansible.git,0.1.3
 ```
 
-The part after the comma is a git ref, and every release is a tag with the collection's version and no `v` in front, so `,0.1.2` installs exactly that release; leave it off and you get `main`. In a `requirements.yml`, the same string goes in `version:`. Each [GitHub release](https://github.com/mastmq/ansible/releases) also carries the built `mastmq-mast-<version>.tar.gz`, which `ansible-galaxy collection install` takes as a file for a controller with no route to GitHub.
+The part after the comma is a git ref, and every release is a tag with the collection's version and no `v` in front, so `,0.1.3` installs exactly that release; leave it off and you get `main`. In a `requirements.yml`, the same string goes in `version:`. Each [GitHub release](https://github.com/mastmq/ansible/releases) also carries the built `mastmq-mast-<version>.tar.gz`, which `ansible-galaxy collection install` takes as a file for a controller with no route to GitHub.
 
 Ansible 2.16 or later on the controller. The targets need systemd and Python 3; the role is tested on Debian 12 and written for any systemd distribution on amd64 or arm64.
 
@@ -86,7 +86,7 @@ Every variable is in [`roles/mast/defaults/main.yml`](roles/mast/defaults/main.y
 
 | Variable | Default | |
 | --- | --- | --- |
-| `mast_version` | `0.3.1` | the release to install |
+| `mast_version` | `0.3.2` | the release to install |
 | `mast_private_address` | default route's address | where the unauthenticated ports bind, and how peers reach this node |
 | `mast_core_jetstream_replicas` | `3` | replication for the KV buckets; cannot exceed the number of cores |
 | `mast_mqtt_port` | `1883` | |

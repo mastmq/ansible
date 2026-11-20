@@ -1,15 +1,21 @@
 ---
 # The same two questions the chart's probes ask, for the same reasons.
 #
-# js-server-only asks whether the server is up. The full /healthz also checks
-# JetStream, which fails while a peer is catching up and whenever the meta
-# group has no quorum, so a lone core being bootstrapped cannot pass it and
-# must not be made to wait on it: its peers are the hosts after it.
+# js-server-only asks whether the server is up. mast's own /readyz asks
+# whether the node can serve: on a core and a standalone node that is
+# nats-server's full JetStream health check, which fails while a peer is
+# catching up and whenever the meta group has no quorum, and on an edge it is
+# whether the leaf connection to the cores is up. A lone core being
+# bootstrapped cannot pass it and must not be made to wait on it: its peers
+# are the hosts after it.
 #
 # A core that was already running is being restarted inside a working
 # cluster. Moving on to the next core before this one has caught up is how a
-# rolling restart takes two of three peers down at once, so it waits for the
-# full check.
+# rolling restart takes two of three peers down at once, so it waits for
+# readiness. So does every edge: one that listens on MQTT but has no leaf
+# link takes devices it cannot carry a message for, and the NATS monitor's
+# /healthz on an edge, which has no JetStream of its own, does not look at
+# the leaf link.
 - name: Wait for the NATS server to come up
   ansible.builtin.uri:
     url: "http://{{ mast_private_address }}:{{ mast_nats_monitor_port }}/healthz?js-server-only=true"
@@ -19,9 +25,9 @@
   delay: "{{ mast_health_delay }}"
   changed_when: false
 
-- name: Wait for JetStream to catch up
+- name: Wait for the node to be ready to serve
   ansible.builtin.uri:
-    url: "http://{{ mast_private_address }}:{{ mast_nats_monitor_port }}/healthz"
+    url: "http://{{ mast_private_address }}:{{ mast_metrics_port }}/readyz"
   register: mast_health
   until: mast_health.status == 200
   retries: "{{ mast_health_retries }}"

@@ -39,6 +39,20 @@
     fail_msg: "mast_install_method must be release, or local with mast_binary_src set"
     quiet: true
 
+# health.yml waits on /readyz, which a release before v0.3.2 does not serve:
+# the wait would retry a 404 for the whole health timeout and then fail with
+# nothing saying why. Only a released version can be compared; a local build
+# or a non-semver archive name is taken on trust.
+- name: Check the release serves /readyz
+  ansible.builtin.assert:
+    that: mast_version is not match('^\d+\.\d+\.\d+$') or mast_version is version('0.3.2', '>=')
+    fail_msg: >-
+      mast_version {{ mast_version }} has no /readyz, which this collection
+      waits on; it needs mast 0.3.2 or later. Use collection 0.1.2 for an
+      older broker.
+    quiet: true
+  when: mast_install_method == 'release'
+
 - name: Check TLS is all or nothing
   ansible.builtin.assert:
     that: (mast_mqtt_tls_cert | length > 0) == (mast_mqtt_tls_key | length > 0)
