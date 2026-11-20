@@ -1,0 +1,85 @@
+---
+name: release
+
+# A tag is the collection version with no prefix (0.1.3, not v0.1.3). The
+# same string then works in both places a user pins a version: `version:` in
+# a requirements.yml that installs from Galaxy, and `,0.1.3` after the git
+# URL, which ansible-galaxy passes to git as a ref. A v prefix would make
+# those two spellings differ for the same release.
+on:
+  push:
+    tags: ["[0-9]+.[0-9]+.[0-9]+"]
+  # For releasing a tag again, or one pushed before this workflow existed.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: an existing tag, such as 0.1.2
+        required: true
+
+permissions:
+  contents: write
+  # Build provenance for the tarball, as mastmq/mast does for its archives.
+  id-token: write
+  attestations: write
+
+jobs:
+  collection:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+      # Empty until the mastmq namespace exists on Galaxy and the secret is
+      # set; the publish step is skipped until then, so a release still
+      # reaches GitHub.
+      GALAXY_API_KEY: ${{ secrets.GALAXY_API_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: pip install ansible-core
+
+      # ansible-galaxy names the tarball from galaxy.yml, not from the tag,
+      # so a tag pushed without bumping galaxy.yml would publish the previous
+      # version again under a new release name. Galaxy refuses a version it
+      # already has, but only after the GitHub release is out.
+      - name: check the tag matches galaxy.yml
+        run: |
+          version="$(python -c 'import yaml; print(yaml.safe_load(open("galaxy.yml"))["version"])')"
+          if [ "$version" != "$TAG" ]; then
+            echo "::error::tag $TAG but galaxy.yml says $version"
+            exit 1
+          fi
+
+      # The notes are the CHANGELOG section for this version, which is
+      # written with the change and reviewed with it, so the release can be
+      # published rather than left as a draft for someone to fill in.
+      - name: release notes
+        run: |
+          awk -v v="## $TAG" '$0 == v { on = 1; next } on && /^## / { exit } on' CHANGELOG.md | sed '/./,$!d' > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::CHANGELOG.md has no section for $TAG"
+            exit 1
+          fi
+          cat notes.md
+
+      - name: build
+        run: ansible-galaxy collection build --output-path dist
+
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: dist/*.tar.gz
+
+      - name: github release
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.tar.gz --clobber
+          else
+            gh release create "$TAG" dist/*.tar.gz --verify-tag --title "$TAG" --notes-file notes.md
+          fi
+
+      - name: publish to Ansible Galaxy
+        if: env.GALAXY_API_KEY != ''
+        run: ansible-galaxy collection publish dist/*.tar.gz --api-key "$GALAXY_API_KEY"

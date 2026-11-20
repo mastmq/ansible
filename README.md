@@ -9,8 +9,10 @@ An Ansible collection, `mastmq.mast`, that runs [mast](https://github.com/mastmq
 ## Install
 
 ```console
-$ ansible-galaxy collection install git+https://github.com/mastmq/ansible.git
+$ ansible-galaxy collection install git+https://github.com/mastmq/ansible.git,0.1.2
 ```
+
+The part after the comma is a git ref, and every release is a tag with the collection's version and no `v` in front, so `,0.1.2` installs exactly that release; leave it off and you get `main`. In a `requirements.yml`, the same string goes in `version:`. Each [GitHub release](https://github.com/mastmq/ansible/releases) also carries the built `mastmq-mast-<version>.tar.gz`, which `ansible-galaxy collection install` takes as a file for a controller with no route to GitHub.
 
 Ansible 2.16 or later on the controller. The targets need systemd and Python 3; the role is tested on Debian 12 and written for any systemd distribution on amd64 or arm64.
 
@@ -104,6 +106,8 @@ Settings are flat variables rather than nested dicts, because Ansible replaces a
 $ just lint   # ansible-lint (production profile) and yamllint
 $ just e2e    # the real playbook against systemd containers
 ```
+
+A release is a commit that sets `version` in `galaxy.yml` and adds that version's section to [`CHANGELOG.md`](CHANGELOG.md), then a tag of the same version (`0.1.3`, no `v`). The release workflow refuses a tag that does not match `galaxy.yml` or has no changelog section, builds the collection, attaches it to a GitHub release with that section as the notes, and publishes it to Ansible Galaxy once the `GALAXY_API_KEY` secret is set.
 
 `just e2e` builds mast from a checkout beside this one (`MAST_SRC` to point elsewhere), starts three cores, two edges and a standalone broker as systemd containers, and runs `site` against them. It then requires a second run to change nothing, a QoS 1 message published on one edge to arrive on the other, a retained message to survive on the standalone, and the same cross-edge delivery after a rolling restart. `KEEP=1` leaves the containers up to poke at.
 

@@ -22,6 +22,9 @@ documentation: https://github.com/mastmq/ansible#readme
 homepage: https://mastmq.github.io/
 issues: https://github.com/mastmq/ansible/issues
 build_ignore:
+  # ansible-lint's cache, which holds a copy of this collection; built in a
+  # checkout that has been linted, it nests the whole collection inside itself.
+  - .ansible
   - .github
   - tests
   - justfile

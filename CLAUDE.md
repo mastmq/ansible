@@ -31,6 +31,10 @@ $ just e2e    # systemd containers, three cores, two edges, one standalone
 
 `just e2e` builds mast from `../mast` and is the test that matters: bootstrap, a second run with `changed=0`, QoS 1 across two edges, retained on standalone, then a rolling restart and QoS 1 again. It needs Docker with cgroup v2; on macOS, colima works.
 
+## Releasing
+
+A release is one commit that sets `version` in `galaxy.yml`, adds its `CHANGELOG.md` section and moves the version in the README's install line, then a tag of the bare version (`0.1.3`). No `v`: `ansible-galaxy collection install git+…,<ref>` passes the ref to git, and Galaxy's `version:` is the bare semver, so a bare tag is the one spelling that works in both. `.github/workflows/release.yaml` refuses a tag that differs from `galaxy.yml` or has no changelog section, attaches the built tarball to a published GitHub release whose notes are that section, and publishes to Galaxy only when the `GALAXY_API_KEY` secret exists. `workflow_dispatch` with a tag re-runs it for an existing tag.
+
 ## Conventions
 
 Conventional commits (`feat(role):`, `fix(role):`, `ci:`, `docs:`), body explaining why. Markdown one paragraph per line. Comments in YAML explain why a thing is the way it is, as in the chart's `values.yaml`.
