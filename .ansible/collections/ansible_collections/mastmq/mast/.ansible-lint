@@ -1,5 +1,0 @@
----
-profile: production
-exclude_paths:
-  - tests/e2e/.build/
-  - .github/

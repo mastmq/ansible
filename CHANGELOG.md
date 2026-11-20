@@ -2,7 +2,7 @@
 
 ## 0.1.2
 
-Installs mast v0.3.0 by default. From that release the cores keep the offline queue for sleeping devices, so a device keeps its QoS 1 and 2 messages when the edge it last used is restarted. The role needs no new settings for it: the queue lives in the JetStream assets the core tier already holds.
+Installs mast v0.3.1 by default. From v0.3.0 the cores keep the offline queue for sleeping devices, so a device keeps its QoS 1 and 2 messages when the edge it last used is restarted. The role needs no new settings for it: the queue lives in the JetStream assets the core tier already holds.
 
 ## 0.1.1
 
