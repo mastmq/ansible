@@ -1,0 +1,14 @@
+---
+version: 2
+updates:
+  # The collection has no package manifest of its own: CI installs
+  # ansible-core and the linters unpinned on every run, and the role downloads
+  # whatever mast release the inventory names. The actions are the only pinned
+  # dependency left to go stale.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
