@@ -53,6 +53,21 @@
     quiet: true
   when: mast_install_method == 'release'
 
+# The names and the range mast's config.Validate accepts, checked here so a
+# typo fails the play before any host is touched rather than on the first
+# edge's restart.
+- name: Check the tracing sampler
+  ansible.builtin.assert:
+    that:
+      - mast_tracing_sampler in ['', 'always_on', 'always_off', 'traceidratio', 'parentbased_always_on', 'parentbased_always_off', 'parentbased_traceidratio']
+      - >-
+        mast_tracing_sampler_arg | string | length == 0 or
+        (mast_tracing_sampler_arg | string is match('^(0|1|0?\.[0-9]+|1\.0+)$'))
+    fail_msg: >-
+      mast_tracing_sampler must be empty or an OTEL_TRACES_SAMPLER name, and
+      mast_tracing_sampler_arg empty or a ratio between 0 and 1, such as "0.01"
+    quiet: true
+
 - name: Check TLS is all or nothing
   ansible.builtin.assert:
     that: (mast_mqtt_tls_cert | length > 0) == (mast_mqtt_tls_key | length > 0)
