@@ -90,6 +90,25 @@ mqtt mosquitto_pub -h mast-e2e-edge2 -t 'e2e/cross' -q 1 -m 'across the fabric'
 wait "$sub"
 [[ "$(cat "$sub_out")" == 'across the fabric' ]] || { echo "FAIL: edge1 got '$(cat "$sub_out")'" >&2; exit 1; }
 
+echo "==> the admin API on a core sees a client an edge holds"
+# A core holds no client, so an answer about one crossed the control plane
+# from the edge that does, and the stats count both edges.
+admin() { docker run --rm --network "$net" curlimages/curl:8.11.1 -s "$@"; }
+token='e2e-admin-token-not-a-secret'
+api="http://mast-e2e-core1:9091/v1/tenants/default"
+docker run --rm --network "$net" eclipse-mosquitto:2 \
+	mosquitto_sub -h mast-e2e-edge1 -i e2e-watcher -t 'e2e/admin' -q 1 -C 1 -W 30 >/dev/null &
+sub=$!
+sleep 3
+got="$(admin -H "Authorization: Bearer $token" "$api/sessions/e2e-watcher")"
+grep -q '"connected":true' <<<"$got" || { echo "FAIL: the core's view of e2e-watcher is '$got'" >&2; exit 1; }
+got="$(admin -H "Authorization: Bearer $token" "$api/stats")"
+grep -q '"nodes":2' <<<"$got" || { echo "FAIL: stats from the core are '$got', want both edges answering" >&2; exit 1; }
+got="$(admin -o /dev/null -w '%{http_code}' "$api/stats")"
+[[ "$got" == 401 ]] || { echo "FAIL: a request without the token got $got" >&2; exit 1; }
+mqtt mosquitto_pub -h mast-e2e-edge2 -t 'e2e/admin' -q 1 -m 'done'
+wait "$sub"
+
 echo "==> standalone QoS 1 with a retained message"
 mqtt mosquitto_pub -h mast-e2e-solo -t 'e2e/solo' -q 1 -r -m 'kept'
 got="$(mqtt mosquitto_sub -h mast-e2e-solo -t 'e2e/solo' -q 1 -C 1 -W 10)"

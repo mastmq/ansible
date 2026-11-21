@@ -68,3 +68,25 @@
   no_log: true
   when: mast_role != 'core' and mast_auth_mode == 'jwt'
   notify: Restart mast
+
+# Root-owned and group-readable like every other file here, rather than owned
+# by mast: the broker only reads it, and one that could rewrite its own admin
+# token is one exploit away from choosing it. mast reads it once at start, so
+# a new token needs the restart.
+- name: Write the admin API token
+  ansible.builtin.copy:
+    content: "{{ mast_admin_token }}"
+    dest: "{{ mast_config_dir }}/admin.token"
+    owner: root
+    group: "{{ mast_group }}"
+    mode: "0640"
+  no_log: true
+  when: mast_admin_enabled | bool
+  notify: Restart mast
+
+# Off, a token left from when it was on is a credential nothing uses.
+- name: Remove the admin API token when the API is off
+  ansible.builtin.file:
+    path: "{{ mast_config_dir }}/admin.token"
+    state: absent
+  when: not mast_admin_enabled | bool

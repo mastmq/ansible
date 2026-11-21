@@ -68,6 +68,22 @@
       mast_tracing_sampler_arg empty or a ratio between 0 and 1, such as "0.01"
     quiet: true
 
+# What mast's config.Validate and its token loader refuse at start, checked
+# before any host is touched. The token is trimmed as mast trims it. The
+# gather pattern is the chart's: a positive duration of at most 5s.
+- name: Check the admin API settings
+  ansible.builtin.assert:
+    that:
+      - mast_admin_token | trim | length >= 16
+      - mast_admin_gather is match('^([1-9][0-9]{0,2}ms|[1-4][0-9]{3}ms|5000ms|[1-4](\.[0-9]+)?s|5(\.0+)?s|0?\.[0-9]*[1-9][0-9]*s)$')
+      - mast_admin_port | int not in [mast_mqtt_port | int, mast_mqtt_ws_port | int, mast_mqtt_internal_port | int, mast_metrics_port | int, mast_nats_monitor_port | int, mast_nats_route_port | int, mast_nats_leaf_port | int, mast_nats_client_port | int]
+    fail_msg: >-
+      mast_admin_enabled needs mast_admin_token of at least 16 bytes (from
+      ansible-vault), mast_admin_gather a positive duration of at most 5s
+      such as "500ms", and mast_admin_port a port no other listener uses.
+    quiet: true
+  when: mast_admin_enabled | bool
+
 - name: Check TLS is all or nothing
   ansible.builtin.assert:
     that: (mast_mqtt_tls_cert | length > 0) == (mast_mqtt_tls_key | length > 0)

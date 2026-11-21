@@ -189,6 +189,27 @@ mast_tracing_sampler_arg: ""
 # the same reason as the auth headers; keep it in ansible-vault.
 mast_tracing_otlp_headers: ""
 
+# mast's admin HTTP API: list a tenant's sessions, read one, disconnect a
+# client, and a tenant's counts, for the whole cluster from any node. Off by
+# default because it can disconnect devices. On every role, a core included,
+# bound to mast_private_address like the other ports a firewall has to keep
+# private. Off writes no [admin] block, so upgrading the collection restarts
+# nothing. Needs a mast that reads [admin] (after 0.3.2); an older one
+# ignores it and serves nothing.
+mast_admin_enabled: false
+# Its own port, apart from mast_metrics_port, because whatever can scrape
+# metrics could otherwise disconnect devices.
+mast_admin_port: 9091
+# How long a list or stats request waits for every node to answer. Every such
+# request waits this long, and a node slower than it is missing from the
+# answer, which says how many answered. mast refuses more than 5s.
+mast_admin_gather: 500ms
+# The bearer token every request presents, at least 16 bytes. No default:
+# keep it in ansible-vault. It is written to a file mast reads once at start,
+# because mast has no setting for the token itself, so it never shows in
+# mast.toml, mast.env or a process listing. Changing it restarts the node.
+mast_admin_token: ""
+
 # Extra environment for the service, merged into the root-only environment
 # file. Anything under MAST__ overrides mast.toml.
 mast_extra_env: {}

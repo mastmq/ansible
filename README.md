@@ -64,18 +64,20 @@ Each version is unpacked into `/opt/mast/<version>` and `/usr/local/bin/mast` is
 | --- | --- |
 | `/etc/mast/mast.toml` | the configuration, owned by root and readable by the `mast` group. Checked by the binary with `mast config show` before it replaces the old one |
 | `/etc/mast/mast.env` | auth headers, the OTLP headers and `mast_extra_env`, kept out of `mast.toml` so a diff in the Ansible output never prints a token |
+| `/etc/mast/admin.token` | the admin API's bearer token, only while `mast_admin_enabled` is on. A file because mast reads the token from nothing else |
 | `/var/lib/mast` | JetStream's store, on core and all-in-one only. The one path that has to survive a reinstall |
 | `/etc/systemd/system/mast.service` | runs as the unprivileged `mast` user, with `LimitNOFILE` raised and the filesystem read-only apart from the store |
 
 ## Network
 
-**Only MQTT faces the world.** Routes (`6222`), leaf connections (`7422`), the NATS client port (`4222`), the NATS monitor (`8222`), metrics and pprof (`9090`) and the unauthenticated internal MQTT listener all bind to `mast_private_address`. None of them authenticate, which inside Kubernetes the cluster network covers and on a VM nothing does, so a firewall has to keep them to the nodes and the monitoring that need them:
+**Only MQTT faces the world.** Routes (`6222`), leaf connections (`7422`), the NATS client port (`4222`), the NATS monitor (`8222`), metrics and pprof (`9090`), the unauthenticated internal MQTT listener and the admin API (`mast_admin_port`) all bind to `mast_private_address`. Apart from the admin API's bearer token, none of them authenticate, which inside Kubernetes the cluster network covers and on a VM nothing does, so a firewall has to keep them to the nodes and the monitoring that need them:
 
 | From | To | Port |
 | --- | --- | --- |
 | core | core | 6222 |
 | edge | core | 7422 |
 | monitoring | every node | 8222, 9090 |
+| operators | any one node | `mast_admin_port`, when the admin API is on |
 | devices | edge, standalone | `mast_mqtt_port`, `mast_mqtt_ws_port` |
 
 `mast_private_address` defaults to the address of the default route. On a machine with a public and a private interface that is usually the public one, so set it per host.
@@ -99,6 +101,10 @@ Every variable is in [`roles/mast/defaults/main.yml`](roles/mast/defaults/main.y
 | `mast_tracing_endpoint` | `""` | the OTLP/HTTP collector, e.g. `http://otel-collector:4318` |
 | `mast_tracing_sampler`, `mast_tracing_sampler_arg` | `""` | an `OTEL_TRACES_SAMPLER` name and its ratio; `parentbased_traceidratio` and `"0.01"` for a fleet |
 | `mast_tracing_otlp_headers` | `""` | `OTEL_EXPORTER_OTLP_HEADERS`, for a collector's API key; written to `mast.env`, not `mast.toml` |
+| `mast_admin_enabled` | `false` | mast's admin HTTP API on every node, which can disconnect devices; writes an `[admin]` block only when on |
+| `mast_admin_port` | `9091` | bound to `mast_private_address`; any node answers for the whole cluster |
+| `mast_admin_gather` | `500ms` | how long a list or stats request waits for every node; at most `5s` |
+| `mast_admin_token` | | the bearer token, at least 16 bytes, from ansible-vault; written to `/etc/mast/admin.token`, never to `mast.toml` or `mast.env` |
 | `mast_edge_serial` | `1` | how many edges `site` restarts at once |
 | `mast_limit_nofile` | `1048576` | every connection is a file descriptor, and the usual 1024 caps an edge at a thousand devices |
 

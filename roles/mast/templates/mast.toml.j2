@@ -132,3 +132,12 @@ sampler = {{ mast_tracing_sampler | to_json }}
 sampler_arg = {{ mast_tracing_sampler_arg | string | to_json }}
 {% endif %}
 {% endif %}
+{% if mast_admin_enabled | bool %}
+
+# Only when on, like [tracing]. On every role: any node answers for the whole
+# cluster. The token is a file beside this one, never a value here.
+[admin]
+addr = "{{ mast_private_address }}:{{ mast_admin_port }}"
+token_file = "{{ mast_config_dir }}/admin.token"
+gather = {{ mast_admin_gather | to_json }}
+{% endif %}
