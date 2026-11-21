@@ -97,6 +97,12 @@ Every variable is in [`roles/mast/defaults/main.yml`](roles/mast/defaults/main.y
 | `mast_auth_http_headers` | `{}` | sent with every auth request; written to `mast.env`, not `mast.toml` |
 | `mast_auth_jwt_hmac_secret`, `mast_auth_jwt_public_key` | | exactly one in `jwt` mode, as content |
 | `mast_session_expiry` | `24h` | |
+| `mast_limits_max_connections` | `0` | a tenant's open connections across the cluster, counted approximately; `0` is unlimited |
+| `mast_limits_publish_rate`, `mast_limits_publish_burst` | `0`, `0` | PUBLISH packets per second per tenant on each node, and the burst before it applies; `0` is unlimited |
+| `mast_limits_offline_queue` | `100` | QoS 1/2 messages kept for one absent session, newest first |
+| `mast_limits_tenants` | `{}` | per-tenant overrides in mast's keys, e.g. `acme: {max_connections: 5000}`; a `[limits]` block is written only when a limit differs from mast's default |
+| `mast_auth_jwt_limits_claim` | `""` | an object claim in the token that overrides its tenant's limits |
+| `mast_metrics_max_tenant_labels` | `1000` | tenants with a metric label of their own; the rest are `~other` |
 | `mast_tracing_enabled` | `false` | OpenTelemetry traces of the message path, on edges and all-in-one hosts; writes a `[tracing]` block only when on |
 | `mast_tracing_endpoint` | `""` | the OTLP/HTTP collector, e.g. `http://otel-collector:4318` |
 | `mast_tracing_sampler`, `mast_tracing_sampler_arg` | `""` | an `OTEL_TRACES_SAMPLER` name and its ratio; `parentbased_traceidratio` and `"0.01"` for a fleet |

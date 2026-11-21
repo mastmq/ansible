@@ -84,6 +84,32 @@
     quiet: true
   when: mast_admin_enabled | bool
 
+# What mast's config.Validate refuses at start. A tenant id becomes a bare
+# TOML key and a koanf path, so it must not hold a dot or anything to quote.
+- name: Check the tenant limits
+  ansible.builtin.assert:
+    that:
+      - mast_limits_max_connections | int >= 0
+      - mast_limits_publish_rate | float >= 0
+      - mast_limits_publish_burst | int >= 0
+      - mast_limits_offline_queue | int >= 1
+      - mast_limits_sync_interval | string is match('^([0-9]+(\.[0-9]+)?(ns|us|ms|s|m|h))+$')
+      - mast_limits_sync_interval | string is not match('^(0+(\.0+)?(ns|us|ms|s|m|h))+$')
+      - mast_metrics_max_tenant_labels | int >= 0
+      - mast_limits_tenants is mapping
+      - mast_limits_tenants.keys() | reject('match', '^[A-Za-z0-9_-]+$') | list | length == 0
+      - >-
+        mast_limits_tenants.values() | map('dict2items') | flatten | map(attribute='key')
+        | reject('in', ['max_connections', 'publish_rate', 'publish_burst', 'offline_queue']) | list | length == 0
+      - mast_limits_tenants.values() | selectattr('offline_queue', 'defined') | map(attribute='offline_queue') | map('int') | select('lt', 1) | list | length == 0
+    fail_msg: >-
+      mast_limits_* must not be negative, mast_limits_offline_queue must be at
+      least 1, mast_limits_sync_interval a positive duration such as "2s", and
+      each mast_limits_tenants entry a tenant id of letters, digits, - and _
+      holding only max_connections, publish_rate, publish_burst and
+      offline_queue, with offline_queue at least 1.
+    quiet: true
+
 - name: Check TLS is all or nothing
   ansible.builtin.assert:
     that: (mast_mqtt_tls_cert | length > 0) == (mast_mqtt_tls_key | length > 0)

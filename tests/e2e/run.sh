@@ -79,6 +79,15 @@ if grep -E 'changed=[1-9]' <<<"$out" >/dev/null; then
 	exit 1
 fi
 
+echo "==> every role reads the limits it was given"
+# mast ignores a key it does not read, so a block that rendered is not yet a
+# block that applies; the resolved configuration is.
+for h in mast-e2e-core1 mast-e2e-edge1 mast-e2e-solo; do
+	got="$(docker exec "$h" /usr/local/bin/mast -c /etc/mast/mast.toml config show)"
+	python3 -c 'import json,sys; c=json.load(sys.stdin); l=c["limits"]; assert l["max_connections"]==1000 and l["tenants"]["default"]["offline_queue"]==500 and c["obs"]["max_tenant_labels"]==100, l' <<<"$got" ||
+		{ echo "FAIL: $h resolved limits as '$got'" >&2; exit 1; }
+done
+
 echo "==> cross-edge QoS 1"
 mqtt() { docker run --rm --network "$net" eclipse-mosquitto:2 "$@"; }
 sub_out="$here/.build/sub.out"

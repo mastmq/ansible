@@ -101,6 +101,9 @@ public_key_file = "{{ mast_config_dir }}/jwt.pub"
 {% endif %}
 tenant_claim = {{ mast_auth_jwt_tenant_claim | to_json }}
 superuser_claim = {{ mast_auth_jwt_superuser_claim | to_json }}
+{% if mast_auth_jwt_limits_claim | length > 0 %}
+limits_claim = {{ mast_auth_jwt_limits_claim | to_json }}
+{% endif %}
 issuer = {{ mast_auth_jwt_issuer | to_json }}
 audience = {{ mast_auth_jwt_audience | to_json }}
 {% endif %}
@@ -115,6 +118,36 @@ durable_max_age = {{ mast_fabric_durable_max_age | to_json }}
 
 [obs]
 addr = "{{ mast_private_address }}:{{ mast_metrics_port }}"
+{% if mast_metrics_max_tenant_labels | int != 1000 %}
+max_tenant_labels = {{ mast_metrics_max_tenant_labels | int }}
+{% endif %}
+{% if mast_limits_max_connections | int != 0 or mast_limits_publish_rate | float != 0 or mast_limits_publish_burst | int != 0 or mast_limits_offline_queue | int != 100 or mast_limits_sync_interval | string != '2s' or mast_limits_tenants | length > 0 %}
+
+# Only when a limit differs from mast's default, like [tracing]. On every
+# role: a core sizes the offline stream from the largest offline_queue.
+[limits]
+max_connections = {{ mast_limits_max_connections | int }}
+publish_rate = {{ mast_limits_publish_rate | float }}
+publish_burst = {{ mast_limits_publish_burst | int }}
+offline_queue = {{ mast_limits_offline_queue | int }}
+sync_interval = {{ mast_limits_sync_interval | string | to_json }}
+{% for id, t in mast_limits_tenants | dictsort %}
+
+[limits.tenants.{{ id }}]
+{% if 'max_connections' in t %}
+max_connections = {{ t.max_connections | int }}
+{% endif %}
+{% if 'publish_rate' in t %}
+publish_rate = {{ t.publish_rate | float }}
+{% endif %}
+{% if 'publish_burst' in t %}
+publish_burst = {{ t.publish_burst | int }}
+{% endif %}
+{% if 'offline_queue' in t %}
+offline_queue = {{ t.offline_queue | int }}
+{% endif %}
+{% endfor %}
+{% endif %}
 {% if mqtt and mast_tracing_enabled | bool %}
 
 # Only when on, so turning the collection over with it off changes nothing.

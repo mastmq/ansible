@@ -74,6 +74,10 @@ mast_nats_leaf_port: 7422
 mast_nats_client_port: 4222
 mast_nats_monitor_port: 8222
 mast_metrics_port: 9090
+# How many tenants get a label of their own on a node's per-tenant metrics;
+# the rest are counted together as tenant="~other". 0 is unbounded, which is
+# fine for a handful of tenants and a Prometheus outage for ten thousand.
+mast_metrics_max_tenant_labels: 1000
 
 # The NATS server name. It has to be unique per node and stable across
 # restarts: a core closes a route from a peer that carries its own name, and
@@ -150,6 +154,10 @@ mast_auth_jwt_hmac_secret: ""
 mast_auth_jwt_public_key: ""
 mast_auth_jwt_tenant_claim: ""
 mast_auth_jwt_superuser_claim: ""
+# An object claim that overrides the tenant's limits, with the keys of a
+# mast_limits_tenants entry: {"max_connections":500,"publish_rate":50}. The
+# newest token's claim wins, by iat. Empty reads no limits from tokens.
+mast_auth_jwt_limits_claim: ""
 mast_auth_jwt_issuer: ""
 mast_auth_jwt_audience: ""
 
@@ -164,6 +172,39 @@ mast_fabric_durable_max_age: 5m
 # How long a disconnected persistent session and its queued QoS 1/2 messages
 # are kept.
 mast_session_expiry: 24h
+
+# Per-tenant limits. The defaults are mast's own, and the [limits] block is
+# written only when one of them changes, so upgrading the collection with
+# them alone restarts nothing. Every role writes the same block: edges and
+# all-in-one hosts enforce it, and a core sizes the offline stream from the
+# largest offline queue here or in mast_limits_tenants. Needs a mast that
+# reads [limits] (after 0.3.2); an older one ignores it.
+#
+# A tenant's open connections across the cluster; 0 is unlimited. Nodes
+# exchange counts every mast_limits_sync_interval over core NATS instead of
+# writing a counter on every CONNECT, so a burst spread over several edges can
+# overshoot it by what they accept within one interval.
+mast_limits_max_connections: 0
+# PUBLISH packets per second per tenant, enforced on each node separately, so
+# adding edges raises what a tenant can send through them all; 0 is
+# unlimited. Over it, QoS 0 is dropped, MQTT 5 QoS 1 gets PUBACK 0x96, and
+# MQTT 5 QoS 2 and MQTT 3.1.1 QoS 1/2 are disconnected.
+mast_limits_publish_rate: 0
+# Publishes that may arrive at once before the rate applies; 0 is one
+# second's worth.
+mast_limits_publish_burst: 0
+# QoS 1/2 messages kept for one absent session, newest first. It also bounds
+# what a device coming back to the node it left is resent, which before
+# limits was everything mochi held for it.
+mast_limits_offline_queue: 100
+mast_limits_sync_interval: 2s
+# Overrides for named tenants, in mast's own keys (max_connections,
+# publish_rate, publish_burst, offline_queue); a key left out keeps the
+# default. A whole dict rather than flat variables, since each tenant's entry
+# is replaced as a unit anyway. A tenant id must be letters, digits, - and _.
+#   mast_limits_tenants:
+#     acme: {max_connections: 5000, publish_rate: 200, offline_queue: 500}
+mast_limits_tenants: {}
 
 # OpenTelemetry traces of the message path, exported over OTLP/HTTP. Only
 # edges and all-in-one hosts trace: a core has no MQTT side and builds no
