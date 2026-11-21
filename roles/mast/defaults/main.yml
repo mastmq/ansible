@@ -19,7 +19,7 @@ mast_role: >-
 
 # --- Installation -----------------------------------------------------------
 
-mast_version: "0.3.2"
+mast_version: "0.4.0"
 
 # release: download the tarball for mast_version from the GitHub release,
 #          verified against the release's checksum file.
@@ -178,7 +178,7 @@ mast_session_expiry: 24h
 # them alone restarts nothing. Every role writes the same block: edges and
 # all-in-one hosts enforce it, and a core sizes the offline stream from the
 # largest offline queue here or in mast_limits_tenants. Needs a mast that
-# reads [limits] (after 0.3.2); an older one ignores it.
+# reads [limits] (0.4.0 or later); an older one ignores it.
 #
 # A tenant's open connections across the cluster; 0 is unlimited. Nodes
 # exchange counts every mast_limits_sync_interval over core NATS instead of
@@ -211,7 +211,7 @@ mast_limits_tenants: {}
 # edges and all-in-one hosts trace: a core has no MQTT side and builds no
 # tracer. Off writes no [tracing] block at all, so upgrading the collection
 # leaves mast.toml alone and restarts nothing. Needs a mast that reads
-# [tracing] (after 0.3.2); an older one ignores it.
+# [tracing] (0.4.0 or later); an older one ignores it.
 mast_tracing_enabled: false
 # The collector, e.g. http://otel-collector:4318. Empty defers to
 # OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT from
@@ -236,7 +236,7 @@ mast_tracing_otlp_headers: ""
 # default because it can disconnect devices. On every role, a core included,
 # bound to mast_private_address like the other ports a firewall has to keep
 # private. Off writes no [admin] block, so upgrading the collection restarts
-# nothing. Needs a mast that reads [admin] (after 0.3.2); an older one
+# nothing. Needs a mast that reads [admin] (0.4.0 or later); an older one
 # ignores it and serves nothing.
 mast_admin_enabled: false
 # Its own port, apart from mast_metrics_port, because whatever can scrape
