@@ -187,8 +187,9 @@ mast_session_expiry: 24h
 mast_limits_max_connections: 0
 # PUBLISH packets per second per tenant, enforced on each node separately, so
 # adding edges raises what a tenant can send through them all; 0 is
-# unlimited. Over it, QoS 0 is dropped, MQTT 5 QoS 1 gets PUBACK 0x96, and
-# MQTT 5 QoS 2 and MQTT 3.1.1 QoS 1/2 are disconnected.
+# unlimited. Over it, QoS 0 is dropped, MQTT 5 QoS 1 gets PUBACK 0x97 Quota
+# exceeded, MQTT 5 QoS 2 is disconnected with 0x96, and MQTT 3.1.1 QoS 1/2
+# are disconnected.
 mast_limits_publish_rate: 0
 # Publishes that may arrive at once before the rate applies; 0 is one
 # second's worth.
