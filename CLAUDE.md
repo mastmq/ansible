@@ -2,7 +2,7 @@
 
 The Ansible collection `mastmq.mast`: mast on virtual machines and bare metal, under systemd. It is the VM counterpart of `mastmq/charts`, and deploys the same two shapes — standalone, or a core tier with edges joining it as leaf nodes.
 
-One role, `roles/mast`, and one playbook, `playbooks/site.yml`. A host's role comes from its inventory group (`mast_core`, `mast_edge`, anything else is all-in-one), not from a variable someone has to remember to set.
+One role, `roles/mast`, and one playbook, `playbooks/site.yml`. A host's role comes from its inventory group (`mast_core`, `mast_edge`, anything else is all-in-one), not from a variable someone has to remember to set. A host in both groups runs two processes, `mast-core` and `mast-edge`; there `site.yml` passes `mast_role` to each tier's play, because the groups cannot say which process a play is for. Everything per process (unit, config directory, binary link, NATS name, the edge's monitor, metrics and admin ports) derives from `mast_service_name`, which stays `mast` on a host with one role so existing installs keep their paths.
 
 ## Keep it in step with the chart and the broker
 
@@ -21,6 +21,8 @@ One role, `roles/mast`, and one playbook, `playbooks/site.yml`. A host's role co
 **Flat variables, not nested dicts.** Ansible replaces a dict rather than merging it, so a user overriding one key of `mast_auth.http` in `group_vars` would drop the rest without a warning.
 
 **ansible-lint copies the collection into `~/.ansible/collections`** when it runs, and that copy then shadows the checkout for every later `ansible-playbook`. `tests/e2e/run.sh` sets `ANSIBLE_COLLECTIONS_PATH` so the e2e test always runs the working tree. It puts its own directory **first, not alone**: alone, it also hid `community.docker`, and that passed on a laptop whose Homebrew Ansible bundles it and failed on the first CI run, which installs `ansible-core` by itself. A green local e2e says little about CI's collection set.
+
+**On a co-located host, everything per process must be per process.** One binary link shared by both would be relinked by the core play, and the edge play would then see no change and never restart onto the new version. One NATS name shared by both would make the edge's leaf look like a route from the core itself. The core play leaves its ports as a fact so the edge play can refuse a clash before it starts a process that can never bind.
 
 ## Testing
 

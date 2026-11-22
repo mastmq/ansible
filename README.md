@@ -9,10 +9,10 @@ An Ansible collection, `mastmq.mast`, that runs [mast](https://github.com/mastmq
 ## Install
 
 ```console
-$ ansible-galaxy collection install git+https://github.com/mastmq/ansible.git,0.2.0
+$ ansible-galaxy collection install git+https://github.com/mastmq/ansible.git,0.3.0
 ```
 
-The part after the comma is a git ref, and every release is a tag with the collection's version and no `v` in front, so `,0.2.0` installs exactly that release; leave it off and you get `main`. In a `requirements.yml`, the same string goes in `version:`. Each [GitHub release](https://github.com/mastmq/ansible/releases) also carries the built `mastmq-mast-<version>.tar.gz`, which `ansible-galaxy collection install` takes as a file for a controller with no route to GitHub.
+The part after the comma is a git ref, and every release is a tag with the collection's version and no `v` in front, so `,0.3.0` installs exactly that release; leave it off and you get `main`. In a `requirements.yml`, the same string goes in `version:`. Each [GitHub release](https://github.com/mastmq/ansible/releases) also carries the built `mastmq-mast-<version>.tar.gz`, which `ansible-galaxy collection install` takes as a file for a controller with no route to GitHub.
 
 Ansible 2.16 or later on the controller. The targets need systemd and Python 3; the role is tested on Debian 12 and written for any systemd distribution on amd64 or arm64.
 
@@ -45,6 +45,12 @@ all:
 $ ansible-playbook -i inventory.yml mastmq.mast.site
 ```
 
+### A core and an edge on the same machine
+
+A host in both `mast_core` and `mast_edge` runs both, as two systemd units, `mast-core` and `mast-edge`, each with its own config directory (`/etc/mast-core`, `/etc/mast-edge`), binary link and NATS name (`<host>-core`, `<host>-edge`). It is the shape for a fleet of three machines: three cores hold quorum across them, and every machine also takes devices. The edge moves its NATS monitor, metrics and admin API to `mast_colocated_edge_nats_monitor_port` (8223), `mast_colocated_edge_metrics_port` (9190) and `mast_colocated_edge_admin_port` (9092), so that the core keeps the usual ports. Set `mast_memory_max` for each process on such a host, or each one sizes its Go memory limit to the whole machine.
+
+Separate machines remain the better shape when the fleet allows it: losing a co-located machine loses a core and an edge at once. A host with one role keeps the unit name `mast` and the paths below, so upgrading the collection does not move an existing install.
+
 `mastmq.mast.site` deploys the cores one at a time, waits for the tier to reach quorum, then rolls the edges one at a time. Run it again to upgrade or reconfigure: a core that was already running has to be fully caught up before the next one restarts, which is what keeps a majority through the whole roll, and an edge restarts only after the one before it is serving MQTT again. See [`examples/inventory`](examples/inventory) for a fuller starting point, and use the role directly as `mastmq.mast.mast` in a playbook of your own.
 
 ## Getting the binary
@@ -76,7 +82,7 @@ Each version is unpacked into `/opt/mast/<version>` and `/usr/local/bin/mast` is
 | --- | --- | --- |
 | core | core | 6222 |
 | edge | core | 7422 |
-| monitoring | every node | 8222, 9090 |
+| monitoring | every node | 8222, 9090 (and 8223, 9190 for a co-located edge) |
 | operators | any one node | `mast_admin_port`, when the admin API is on |
 | devices | edge, standalone | `mast_mqtt_port`, `mast_mqtt_ws_port` |
 
@@ -113,6 +119,7 @@ Every variable is in [`roles/mast/defaults/main.yml`](roles/mast/defaults/main.y
 | `mast_admin_token` | | the bearer token, at least 16 bytes, from ansible-vault; written to `/etc/mast/admin.token`, never to `mast.toml` or `mast.env` |
 | `mast_edge_serial` | `1` | how many edges `site` restarts at once |
 | `mast_limit_nofile` | `1048576` | every connection is a file descriptor, and the usual 1024 caps an edge at a thousand devices |
+| `mast_memory_max` | `""` | `MemoryMax=` for the unit, e.g. `1G`; mast sizes Go's memory limit from it |
 
 Settings are flat variables rather than nested dicts, because Ansible replaces a dict instead of merging it: overriding one key of a nested default in `group_vars` would silently drop the rest.
 

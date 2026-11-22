@@ -5,6 +5,10 @@
 #   mast_edge        the MQTT tier, joining the cores as leaf nodes
 #   mast_standalone  all-in-one hosts, each a broker of its own
 #
+# A host in both mast_core and mast_edge runs both, as mast-core and
+# mast-edge. Each tier's play names its role, because the host's groups
+# cannot say which of its two processes a play is for.
+#
 # Every play rolls one host at a time. A core restarted beside another loses
 # quorum, and an edge restarted beside another reconnects twice the devices at
 # once; correlated reconnects are the failure mode that actually hurts.
@@ -18,6 +22,7 @@
   any_errors_fatal: true
   roles:
     - role: mastmq.mast.mast
+      mast_role: core
 
 - name: Wait for the core tier to reach quorum
   hosts: mast_core
@@ -27,6 +32,8 @@
       ansible.builtin.include_role:
         name: mastmq.mast.mast
         tasks_from: quorum.yml
+      vars:
+        mast_role: core
 
 - name: Deploy the edge tier
   hosts: mast_edge
@@ -35,6 +42,7 @@
   max_fail_percentage: 0
   roles:
     - role: mastmq.mast.mast
+      mast_role: edge
 
 - name: Deploy standalone brokers
   hosts: mast_standalone

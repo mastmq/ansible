@@ -88,6 +88,16 @@ for h in mast-e2e-core1 mast-e2e-edge1 mast-e2e-solo; do
 		{ echo "FAIL: $h resolved limits as '$got'" >&2; exit 1; }
 done
 
+echo "==> core3 runs a core and an edge, each its own unit"
+for unit in mast-core mast-edge; do
+	docker exec mast-e2e-core3 systemctl is-active --quiet "$unit" || { echo "FAIL: $unit is not active on core3" >&2; exit 1; }
+done
+docker exec mast-e2e-core3 systemctl show -p MemoryMax --value mast-edge | grep -qx 536870912 ||
+	{ echo "FAIL: mast-edge on core3 has no MemoryMax" >&2; exit 1; }
+docker exec mast-e2e-core3 /usr/local/bin/mast-edge -c /etc/mast-edge/mast.toml config show |
+	python3 -c 'import json,sys; c=json.load(sys.stdin); assert c["role"]=="edge" and c["nats"]["name"]=="mast-e2e-core3-edge", c["nats"]' ||
+	{ echo "FAIL: core3's edge config is wrong" >&2; exit 1; }
+
 echo "==> cross-edge QoS 1"
 mqtt() { docker run --rm --network "$net" eclipse-mosquitto:2 "$@"; }
 sub_out="$here/.build/sub.out"
@@ -98,6 +108,15 @@ sleep 3
 mqtt mosquitto_pub -h mast-e2e-edge2 -t 'e2e/cross' -q 1 -m 'across the fabric'
 wait "$sub"
 [[ "$(cat "$sub_out")" == 'across the fabric' ]] || { echo "FAIL: edge1 got '$(cat "$sub_out")'" >&2; exit 1; }
+
+echo "==> QoS 1 from the edge beside a core to a separate edge"
+docker run --rm --network "$net" eclipse-mosquitto:2 \
+	mosquitto_sub -h mast-e2e-edge1 -t 'e2e/colocated' -q 1 -C 1 -W 20 >"$sub_out" &
+sub=$!
+sleep 3
+mqtt mosquitto_pub -h mast-e2e-core3 -t 'e2e/colocated' -q 1 -m 'from beside a core'
+wait "$sub"
+[[ "$(cat "$sub_out")" == 'from beside a core' ]] || { echo "FAIL: edge1 got '$(cat "$sub_out")' from core3's edge" >&2; exit 1; }
 
 echo "==> the admin API on a core sees a client an edge holds"
 # A core holds no client, so an answer about one crossed the control plane
@@ -112,7 +131,7 @@ sleep 3
 got="$(admin -H "Authorization: Bearer $token" "$api/sessions/e2e-watcher")"
 grep -q '"connected":true' <<<"$got" || { echo "FAIL: the core's view of e2e-watcher is '$got'" >&2; exit 1; }
 got="$(admin -H "Authorization: Bearer $token" "$api/stats")"
-grep -q '"nodes":2' <<<"$got" || { echo "FAIL: stats from the core are '$got', want both edges answering" >&2; exit 1; }
+grep -q '"nodes":3' <<<"$got" || { echo "FAIL: stats from the core are '$got', want all three edges answering" >&2; exit 1; }
 got="$(admin -o /dev/null -w '%{http_code}' "$api/stats")"
 [[ "$got" == 401 ]] || { echo "FAIL: a request without the token got $got" >&2; exit 1; }
 mqtt mosquitto_pub -h mast-e2e-edge2 -t 'e2e/admin' -q 1 -m 'done'

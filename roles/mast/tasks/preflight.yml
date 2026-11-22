@@ -5,14 +5,40 @@
     fail_msg: "mast_role is {{ mast_role }}; it must be all-in-one, core or edge"
     quiet: true
 
-- name: Refuse a host that is in both tiers
+# On a host in both tiers mast_role says which of the two processes this
+# play is for, and only site.yml knows: the default says core for both.
+- name: Refuse a co-located host without a tier to deploy
   ansible.builtin.assert:
-    that: not (inventory_hostname in groups.get(mast_core_group, []) and inventory_hostname in groups.get(mast_edge_group, []))
+    that: not (mast_colocated | bool) or mast_role in ['core', 'edge']
     fail_msg: >-
-      {{ inventory_hostname }} is in both {{ mast_core_group }} and {{ mast_edge_group }}.
-      The tiers are split so that an edge restart is never Raft churn; one
-      process per machine, one role per process.
+      {{ inventory_hostname }} is in both {{ mast_core_group }} and
+      {{ mast_edge_group }}, so it runs a core and an edge; pass mast_role
+      core or edge to the role, as site.yml does.
     quiet: true
+
+# The core play runs first and leaves its ports behind as a fact, so the edge
+# beside it can be checked against what is really bound, overrides included.
+# A clash would otherwise show up as an edge that never gets healthy.
+- name: Remember the ports the core on this host listens on
+  ansible.builtin.set_fact:
+    mast_colocated_core_ports: >-
+      {{ [mast_nats_client_port, mast_nats_route_port, mast_nats_leaf_port, mast_nats_monitor_port, mast_metrics_port]
+         + ([mast_admin_port] if mast_admin_enabled | bool else []) }}
+  when: mast_colocated | bool and mast_role == 'core'
+
+- name: Refuse an edge whose ports clash with the core beside it
+  ansible.builtin.assert:
+    that: >-
+      ([mast_mqtt_port, mast_mqtt_ws_port, mast_mqtt_internal_port, mast_nats_monitor_port, mast_metrics_port]
+       + ([mast_admin_port] if mast_admin_enabled | bool else []))
+      | map('int') | select('gt', 0) | intersect(mast_colocated_core_ports | map('int')) | length == 0
+    fail_msg: >-
+      the edge on {{ inventory_hostname }} would listen on a port its core
+      already holds ({{ mast_colocated_core_ports | join(', ') }}); set
+      mast_colocated_edge_nats_monitor_port, mast_colocated_edge_metrics_port
+      and mast_colocated_edge_admin_port to free ones.
+    quiet: true
+  when: mast_colocated | bool and mast_role == 'edge' and mast_colocated_core_ports is defined
 
 - name: Check the cluster can hold its replication factor
   ansible.builtin.assert:
@@ -164,7 +190,7 @@
 
 - name: Check whether mast is already running
   ansible.builtin.systemd_service:
-    name: mast
+    name: "{{ mast_service_name }}"
   register: mast_unit
   failed_when: false
 

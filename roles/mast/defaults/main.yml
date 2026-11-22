@@ -8,14 +8,27 @@
 # runs all-in-one, which is one process, file-backed JetStream and no
 # cluster: an edge site, a lab, anything small enough not to want two tiers.
 #
-# Keep the tiers on separate machines. Coupling them turns every edge restart
-# into Raft membership churn, which is the reason the split exists.
+# Separate machines are the better shape: a machine that holds both tiers
+# loses a core and an edge together. A host in both groups still works, for a
+# fleet of three machines where three cores and three more edges would be
+# twice the bill. It runs two processes, mast-core and mast-edge, each with
+# its own unit, config directory and binary link, so an edge restart is
+# still only an edge restart and never Raft churn. site.yml passes mast_role
+# to each tier's play; the expression below is what every other entry point
+# (a playbook of your own, the quorum check) sees.
 mast_core_group: mast_core
 mast_edge_group: mast_edge
 mast_role: >-
   {{ 'core' if inventory_hostname in groups.get(mast_core_group, [])
      else 'edge' if inventory_hostname in groups.get(mast_edge_group, [])
      else 'all-in-one' }}
+mast_colocated: >-
+  {{ inventory_hostname in groups.get(mast_core_group, [])
+     and inventory_hostname in groups.get(mast_edge_group, []) }}
+# The unit, and the name the config directory and binary link take after it.
+# Plain "mast" on a host with one role, so an install from before co-location
+# keeps its paths and is not restarted by an upgrade of the collection.
+mast_service_name: "{{ 'mast-' ~ mast_role if mast_colocated | bool else 'mast' }}"
 
 # --- Installation -----------------------------------------------------------
 
@@ -36,11 +49,13 @@ mast_release_checksums: "mast_{{ mast_version }}_checksums.txt"
 # so an upgrade is a relink plus a restart, and a rollback is the same with the
 # older version: nothing is re-downloaded that is still on disk.
 mast_install_dir: /opt/mast
-mast_bin_path: /usr/local/bin/mast
+# One link per process, so that an upgrade relinks, and so restarts, the
+# edge on a co-located host too, not only the core that ran first.
+mast_bin_path: "/usr/local/bin/{{ mast_service_name }}"
 
 mast_user: mast
 mast_group: mast
-mast_config_dir: /etc/mast
+mast_config_dir: "/etc/{{ mast_service_name }}"
 # JetStream's store. Only core and all-in-one write here, and it is the one
 # path on the machine that must survive a reinstall.
 mast_data_dir: /var/lib/mast
@@ -72,8 +87,14 @@ mast_mqtt_internal_port: 0
 mast_nats_route_port: 6222
 mast_nats_leaf_port: 7422
 mast_nats_client_port: 4222
-mast_nats_monitor_port: 8222
-mast_metrics_port: 9090
+mast_nats_monitor_port: "{{ mast_colocated_edge_nats_monitor_port if mast_colocated | bool and mast_role == 'edge' else 8222 }}"
+mast_metrics_port: "{{ mast_colocated_edge_metrics_port if mast_colocated | bool and mast_role == 'edge' else 9090 }}"
+# Every node has a NATS monitor and a metrics listener, and an admin API when
+# it is on, so the edge beside a core needs ports of its own for them. The
+# core keeps the usual ones, which is what monitoring already scrapes.
+mast_colocated_edge_nats_monitor_port: 8223
+mast_colocated_edge_metrics_port: 9190
+mast_colocated_edge_admin_port: 9092
 # How many tenants get a label of their own on a node's per-tenant metrics;
 # the rest are counted together as tenant="~other". 0 is unbounded, which is
 # fine for a handful of tenants and a Prometheus outage for ten thousand.
@@ -83,7 +104,9 @@ mast_metrics_max_tenant_labels: 1000
 # restarts: a core closes a route from a peer that carries its own name, and
 # a second leaf under a name already attached evicts the first, so edges that
 # share a name knock each other off in turn.
-mast_nats_name: "{{ inventory_hostname }}"
+# The core and the edge on one host take the role as a suffix: an edge whose
+# leaf carries its core's name would be closed as a route to itself.
+mast_nats_name: "{{ inventory_hostname ~ ('-' ~ mast_role if mast_colocated | bool else '') }}"
 
 # --- Broker settings ---------------------------------------------------------
 
@@ -241,7 +264,7 @@ mast_tracing_otlp_headers: ""
 mast_admin_enabled: false
 # Its own port, apart from mast_metrics_port, because whatever can scrape
 # metrics could otherwise disconnect devices.
-mast_admin_port: 9091
+mast_admin_port: "{{ mast_colocated_edge_admin_port if mast_colocated | bool and mast_role == 'edge' else 9091 }}"
 # How long a list or stats request waits for every node to answer. Every such
 # request waits this long, and a node slower than it is missing from the
 # answer, which says how many answered. mast refuses more than 5s.
@@ -261,6 +284,12 @@ mast_extra_env: {}
 # Every connection is a file descriptor, and the usual 1024 soft limit caps an
 # edge at a thousand devices without saying why.
 mast_limit_nofile: 1048576
+
+# MemoryMax= for the unit, e.g. "1G"; empty sets none. mast sets Go's memory
+# limit to 90% of its cgroup's, so this is also what makes it collect harder
+# before the kernel kills it. Worth setting on a co-located host, where the
+# core and the edge would otherwise each size themselves to the whole machine.
+mast_memory_max: ""
 
 # Raft wants a clean handover rather than a kill; an edge wants long enough
 # for its devices to be handed over rather than cut.

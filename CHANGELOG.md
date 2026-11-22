@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+A host in both `mast_core` and `mast_edge` now runs both, as the units `mast-core` and `mast-edge`, instead of being refused. It is the shape for a fleet of three machines that should each hold a core and take devices. Each process has its own config directory, binary link and NATS name, and the edge moves its NATS monitor, metrics and admin API to 8223, 9190 and 9092, so the core keeps the usual ports. Separate machines are still the better shape when the fleet allows it.
+
+`mast_memory_max` sets `MemoryMax=` on the unit. mast sizes Go's memory limit from it, which matters on a co-located host, where each process would otherwise size itself to the whole machine.
+
+A host with one role keeps the unit name `mast` and its paths, so upgrading from 0.2.0 changes nothing on it. Installs mast v0.4.0, as 0.2.0 did.
+
 ## 0.2.0
 
 Installs mast v0.4.0 by default, and can turn on the three things that release adds. Each one is off, or at mast's own default, unless you set it, and the role writes its block to `mast.toml` only then, so upgrading the collection alone leaves the file unchanged and restarts nothing.
