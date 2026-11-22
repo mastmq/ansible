@@ -27,6 +27,9 @@ StartLimitIntervalSec=300
 StartLimitBurst=10
 
 LimitNOFILE={{ mast_limit_nofile }}
+{% if mast_memory_max | length > 0 %}
+MemoryMax={{ mast_memory_max }}
+{% endif %}
 
 {% if [mast_mqtt_port, mast_mqtt_ws_port] | map('int') | select('>', 0) | select('<', 1024) | list | length > 0 %}
 # A listener below 1024 needs this and nothing else from root.

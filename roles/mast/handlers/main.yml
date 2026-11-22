@@ -4,7 +4,7 @@
 # its first JetStream restore twice.
 - name: Restart mast
   ansible.builtin.systemd_service:
-    name: mast
+    name: "{{ mast_service_name }}"
     state: restarted
     daemon_reload: true
   when: mast_was_running | bool
